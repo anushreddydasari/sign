@@ -6,7 +6,7 @@ from pymongo import MongoClient
 from gridfs import GridFS
 import fitz  # PyMuPDF
 
-MONGO_URI = os.environ["mongodb://atlas-sql-678de852140a202fda922fa8-fsazs.a.query.mongodb.net/agr_cpq?ssl=true&authSource=admin"]
+MONGO_URI = os.environ["mongodb+srv://anushreddydasari:anushreddydasari@study.fsazs.mongodb.net/"]
 SIGN_SECRET = os.environ.get("SIGN_SECRET", "change-me")
 PORT = int(os.environ.get("PORT", "5001"))
 
