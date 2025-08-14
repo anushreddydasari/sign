@@ -3,3 +3,4 @@ pymongo
 pymupdf
 Pillow
 pypdf
+add gunicorn
