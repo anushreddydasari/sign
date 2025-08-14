@@ -77,7 +77,6 @@ def sign_get(token):
     if q.get(role, {}).get("signed"):
         return render_template_string(SIGN_FORM, qid=q.get("quote_id",""), role=role, msg="Already signed.")
     return render_template_string(SIGN_FORM, qid=q.get("quote_id",""), role=role, msg=None)
-
 @app.post("/sign/<token>")
 def sign_post(token):
     q, role = find_by_token(token)
@@ -87,20 +86,42 @@ def sign_post(token):
     if not file:
         return abort(400, "signature required")
 
-    orig = fs.find_one({"metadata.type":"quote_original","metadata.quote_id": q.get("quote_id","")})
+    # fetch original PDF
+    orig = fs.find_one({"metadata.type": "quote_original",
+                        "metadata.quote_id": q.get("quote_id", "")})
     if not orig:
         return abort(400, "original pdf missing")
-    signed_pdf = overlay_signature(orig.read(), file.read(), x=380 if role=="seller" else 120, y=120)
 
-    fid = fs.put(signed_pdf, filename=f"{q.get('quote_id','')}-{role}-signed.pdf",
-                 metadata={"type":"quote_signed","quote_id": q.get("quote_id",""), "role": role})
-    quotes.update_one({"_id": q["_id"]}, {"$set":{
-        f"{role}.signed": True, f"{role}.signed_at": datetime.utcnow(), f"{role}.file_id": fid,
-        "status": ("fully_signed" if (role=="buyer" and q.get("seller",{}).get("signed")) or
-                                 (role=="seller" and q.get("buyer",{}).get("signed")) else f"{role}_signed}")
-    }})
-    return send_file(BytesIO(signed_pdf), mimetype="application/pdf",
-                     as_attachment=True, download_name=f"{q.get('quote_id','')}-{role}-signed.pdf")
+    signed_pdf = overlay_signature(
+        orig.read(), file.read(),
+        x=380 if role == "seller" else 120, y=120
+    )
 
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=PORT)
+    fid = fs.put(
+        signed_pdf,
+        filename=f"{q.get('quote_id','')}-{role}-signed.pdf",
+        metadata={"type": "quote_signed",
+                  "quote_id": q.get("quote_id",""),
+                  "role": role}
+    )
+
+    # compute new status cleanly (avoid f-string brace issues)
+    other_signed = q.get("seller", {}).get("signed") if role == "buyer" else q.get("buyer", {}).get("signed")
+    status = "fully_signed" if other_signed else f"{role}_signed"
+
+    quotes.update_one(
+        {"_id": q["_id"]},
+        {"$set": {
+            f"{role}.signed": True,
+            f"{role}.signed_at": datetime.utcnow(),
+            f"{role}.file_id": fid,
+            "status": status
+        }}
+    )
+
+    return send_file(
+        BytesIO(signed_pdf),
+        mimetype="application/pdf",
+        as_attachment=True,
+        download_name=f"{q.get('quote_id','')}-{role}-signed.pdf"
+    )
